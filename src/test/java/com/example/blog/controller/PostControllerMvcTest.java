@@ -118,4 +118,11 @@ class PostControllerMvcTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").exists());
     }
+
+    @Test
+    void invalidIdMapsTo400Json() throws Exception {
+        mockMvc.perform(get("/api/posts/undefined"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").exists());
+    }
 }
