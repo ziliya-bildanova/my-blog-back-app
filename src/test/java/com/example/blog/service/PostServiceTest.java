@@ -1,17 +1,14 @@
 package com.example.blog.service;
 
-import com.example.blog.config.TestConfig;
+import com.example.blog.BaseSpringTest;
 import com.example.blog.dto.CreatePostRequest;
 import com.example.blog.dto.PostDto;
 import com.example.blog.dto.PostListResponse;
 import com.example.blog.dto.UpdatePostRequest;
 import com.example.blog.exception.NotFoundException;
+import com.example.blog.exception.PayloadTooLargeException;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -22,10 +19,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Service tests with the real DAO layer on embedded H2.
  * Shares the cached Spring context.
  */
-@ExtendWith(SpringExtension.class)
-@ContextConfiguration(classes = TestConfig.class)
-@Transactional
-class PostServiceTest {
+class PostServiceTest extends BaseSpringTest {
 
     @Autowired
     private PostService postService;
@@ -50,6 +44,25 @@ class PostServiceTest {
         assertThat(page2.isHasPrev()).isTrue();
         assertThat(page2.isHasNext()).isFalse();
         assertThat(page2.getPosts().get(0).getText()).endsWith("…");
+    }
+
+    @Test
+    void listSearchIsCaseInsensitiveAndEscapesWildcards() {
+        create("100% sale", "body");
+        create("Other", "price 1000", List.of());
+
+        assertThat(postService.getPosts("100%", 1, 5).getPosts()).hasSize(1);
+        assertThat(postService.getPosts("SALE", 1, 5).getPosts()).hasSize(1);
+    }
+
+    @Test
+    void invalidPaginationRejected() {
+        assertThatThrownBy(() -> postService.getPosts("", 0, 5))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> postService.getPosts("", 1, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> postService.getPosts("", 1, 101))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -81,6 +94,18 @@ class PostServiceTest {
     }
 
     @Test
+    void updateIdMismatchRejected() {
+        PostDto created = create("Title", "Text");
+        UpdatePostRequest update = new UpdatePostRequest();
+        update.setId(created.getId() + 1);
+        update.setTitle("New");
+        update.setText("New text");
+
+        assertThatThrownBy(() -> postService.updatePost(created.getId(), update))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void validationAndNotFound() {
         CreatePostRequest bad = new CreatePostRequest();
         bad.setTitle(" ");
@@ -91,6 +116,8 @@ class PostServiceTest {
         assertThatThrownBy(() -> postService.getPost(999999L))
                 .isInstanceOf(NotFoundException.class);
         assertThatThrownBy(() -> postService.likePost(999999L))
+                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> postService.deletePost(999999L))
                 .isInstanceOf(NotFoundException.class);
     }
 
@@ -106,11 +133,33 @@ class PostServiceTest {
         assertThat(postService.getImage(created.getId()).getBytes()).isEqualTo(bytes);
     }
 
+    @Test
+    void imageErrors() {
+        PostDto created = create("Title", "Text");
+
+        // Post without image vs missing post are different errors.
+        assertThatThrownBy(() -> postService.getImage(created.getId()))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("Image not found");
+        assertThatThrownBy(() -> postService.getImage(999999L))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("Post not found");
+        assertThatThrownBy(() -> postService.saveImage(created.getId(), new byte[0], "image/png"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> postService.saveImage(
+                        created.getId(), new byte[(int) PostServiceImpl.MAX_IMAGE_SIZE + 1], "image/png"))
+                .isInstanceOf(PayloadTooLargeException.class);
+    }
+
     private PostDto create(String title, String text) {
+        return create(title, text, List.of("tag_1", "tag_2"));
+    }
+
+    private PostDto create(String title, String text, List<String> tags) {
         CreatePostRequest request = new CreatePostRequest();
         request.setTitle(title);
         request.setText(text);
-        request.setTags(List.of("tag_1", "tag_2"));
+        request.setTags(tags);
         return postService.createPost(request);
     }
 }

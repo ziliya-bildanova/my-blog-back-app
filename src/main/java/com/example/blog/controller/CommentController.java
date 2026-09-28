@@ -4,6 +4,7 @@ import com.example.blog.dto.CommentDto;
 import com.example.blog.dto.CreateCommentRequest;
 import com.example.blog.dto.UpdateCommentRequest;
 import com.example.blog.service.CommentService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -42,7 +43,8 @@ public class CommentController {
     }
 
     @PostMapping
-    public CommentDto create(@PathVariable("postId") long postId, @RequestBody CreateCommentRequest request) {
+    public CommentDto create(@PathVariable("postId") long postId,
+                             @Valid @RequestBody CreateCommentRequest request) {
         return commentService.createComment(postId, request);
     }
 
@@ -50,7 +52,7 @@ public class CommentController {
     public CommentDto update(
             @PathVariable("postId") long postId,
             @PathVariable("commentId") long commentId,
-            @RequestBody UpdateCommentRequest request) {
+            @Valid @RequestBody UpdateCommentRequest request) {
         return commentService.updateComment(postId, commentId, request);
     }
 

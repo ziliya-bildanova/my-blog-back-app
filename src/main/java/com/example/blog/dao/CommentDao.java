@@ -7,14 +7,24 @@ import java.util.Optional;
 
 /**
  * Persistence operations for comments.
+ * Absence is reported with {@code boolean}/{@code Optional};
+ * translating it into errors is the service layer's job.
  */
 public interface CommentDao {
 
-    long insert(long postId, String text);
+    /**
+     * Inserts a comment in a single statement that also checks the post exists,
+     * so no race window remains between a SELECT and the INSERT.
+     *
+     * @return the new id, or empty if the post does not exist.
+     */
+    Optional<Long> insertIfPostExists(long postId, String text);
 
-    void update(long postId, long commentId, String text);
+    /** @return true if a row was updated. */
+    boolean update(long postId, long commentId, String text);
 
-    void delete(long postId, long commentId);
+    /** @return true if a row was deleted. */
+    boolean delete(long postId, long commentId);
 
     Optional<Comment> findById(long postId, long commentId);
 

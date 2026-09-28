@@ -1,6 +1,5 @@
 package com.example.blog.dao;
 
-import com.example.blog.exception.NotFoundException;
 import com.example.blog.model.Comment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -11,7 +10,6 @@ import org.springframework.stereotype.Repository;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -30,35 +28,34 @@ public class CommentDaoImpl implements CommentDao {
     }
 
     @Override
-    public long insert(long postId, String text) {
+    public Optional<Long> insertIfPostExists(long postId, String text) {
         KeyHolder keyHolder = new GeneratedKeyHolder();
-        jdbcTemplate.update(connection -> {
+        int rows = jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(
-                    "INSERT INTO comments (post_id, text) VALUES (?, ?)",
+                    "INSERT INTO comments (post_id, text) SELECT id, ? FROM posts WHERE id = ?",
                     Statement.RETURN_GENERATED_KEYS);
-            ps.setLong(1, postId);
-            ps.setString(2, text);
+            ps.setString(1, text);
+            ps.setLong(2, postId);
             return ps;
         }, keyHolder);
-        return Objects.requireNonNull(keyHolder.getKey()).longValue();
+        if (rows == 0) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(keyHolder.getKey()).map(Number::longValue);
     }
 
     @Override
-    public void update(long postId, long commentId, String text) {
-        int rows = jdbcTemplate.update(
-                "UPDATE comments SET text = ? WHERE id = ? AND post_id = ?", text, commentId, postId);
-        if (rows == 0) {
-            throw new NotFoundException("Comment not found: " + commentId + " for post " + postId);
-        }
+    public boolean update(long postId, long commentId, String text) {
+        return jdbcTemplate.update(
+                "UPDATE comments SET text = ? WHERE id = ? AND post_id = ?",
+                text, commentId, postId) > 0;
     }
 
     @Override
-    public void delete(long postId, long commentId) {
-        int rows = jdbcTemplate.update(
-                "DELETE FROM comments WHERE id = ? AND post_id = ?", commentId, postId);
-        if (rows == 0) {
-            throw new NotFoundException("Comment not found: " + commentId + " for post " + postId);
-        }
+    public boolean delete(long postId, long commentId) {
+        return jdbcTemplate.update(
+                "DELETE FROM comments WHERE id = ? AND post_id = ?",
+                commentId, postId) > 0;
     }
 
     @Override
