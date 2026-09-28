@@ -1,5 +1,9 @@
 package com.example.blog.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -8,9 +12,18 @@ import java.util.List;
  */
 public class CreatePostRequest {
 
+    @NotBlank(message = "Post title is required")
+    @Size(max = 255, message = "Post title must be at most 255 characters")
     private String title;
+
+    @NotBlank(message = "Post text is required")
     private String text;
-    private List<String> tags = new ArrayList<>();
+
+    @NotNull(message = "Tags are required")
+    @Size(max = PostValidation.MAX_TAGS, message = "Too many tags")
+    private List<@NotBlank(message = "Tag must not be blank")
+            @Size(max = PostValidation.MAX_TAG_LENGTH,
+                    message = "Tag must be at most 100 characters") String> tags = new ArrayList<>();
 
     public String getTitle() {
         return title;
