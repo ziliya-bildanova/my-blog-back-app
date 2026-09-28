@@ -12,17 +12,21 @@ import org.springframework.jdbc.datasource.init.DataSourceInitializer;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.web.multipart.MultipartResolver;
+import org.springframework.web.multipart.support.StandardServletMultipartResolver;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import javax.sql.DataSource;
 
 /**
  * Shared test infrastructure: isolated H2 database (schema only, no demo data),
- * DAOs, services, controllers and the exception handler.
- * No web MVC infrastructure here, so this context also works without
- * a ServletContext (DAO/service tests). Cached and reused by all tests
- * that use it (Spring TestContext Framework context caching).
+ * DAOs, services, controllers, MVC infrastructure and the exception handler.
+ * Single context for ALL Spring tests (with {@code @WebAppConfiguration} in the
+ * base class, so {@code @EnableWebMvc} beans get a ServletContext).
+ * Cached and reused (Spring TestContext Framework context caching).
  */
 @Configuration
+@EnableWebMvc
 @EnableTransactionManagement
 @ComponentScan(
         basePackages = "com.example.blog",
@@ -49,6 +53,11 @@ public class TestConfig {
     @Bean
     public PlatformTransactionManager transactionManager(DataSource dataSource) {
         return new DataSourceTransactionManager(dataSource);
+    }
+
+    @Bean
+    public MultipartResolver multipartResolver() {
+        return new StandardServletMultipartResolver();
     }
 
     @Bean

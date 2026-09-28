@@ -6,6 +6,7 @@ import com.example.blog.dto.PostListResponse;
 import com.example.blog.dto.UpdatePostRequest;
 import com.example.blog.model.ImageData;
 import com.example.blog.service.PostService;
+import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -38,11 +39,15 @@ public class PostController {
         this.postService = postService;
     }
 
+    /**
+     * All three parameters are required by the contract: a missing parameter
+     * is a 400, while an empty {@code search} means "match all".
+     */
     @GetMapping
     public PostListResponse list(
-            @RequestParam(value = "search", defaultValue = "") String search,
-            @RequestParam(value = "pageNumber", defaultValue = "1") int pageNumber,
-            @RequestParam(value = "pageSize", defaultValue = "5") int pageSize) {
+            @RequestParam(value = "search", required = true) String search,
+            @RequestParam(value = "pageNumber", required = true) int pageNumber,
+            @RequestParam(value = "pageSize", required = true) int pageSize) {
         return postService.getPosts(search, pageNumber, pageSize);
     }
 
@@ -56,12 +61,13 @@ public class PostController {
     }
 
     @PostMapping
-    public PostDto create(@RequestBody CreatePostRequest request) {
+    public PostDto create(@Valid @RequestBody CreatePostRequest request) {
         return postService.createPost(request);
     }
 
     @PutMapping("/{id}")
-    public PostDto update(@PathVariable("id") long id, @RequestBody UpdatePostRequest request) {
+    public PostDto update(@PathVariable("id") long id,
+                          @Valid @RequestBody UpdatePostRequest request) {
         return postService.updatePost(id, request);
     }
 

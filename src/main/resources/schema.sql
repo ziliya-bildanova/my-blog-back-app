@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS posts (
 
 CREATE TABLE IF NOT EXISTS post_tags (
     post_id BIGINT NOT NULL REFERENCES posts (id) ON DELETE CASCADE,
-    tag VARCHAR(100) NOT NULL
+    tag VARCHAR(100) NOT NULL,
+    PRIMARY KEY (post_id, tag)
 );
 CREATE INDEX IF NOT EXISTS idx_post_tags_post_id ON post_tags (post_id);
 

@@ -45,22 +45,38 @@ public class CommentServiceImpl implements CommentService {
     @Override
     @Transactional
     public CommentDto createComment(long postId, CreateCommentRequest request) {
-        requirePost(postId);
+        if (!Long.valueOf(postId).equals(request.getPostId())) {
+            throw new IllegalArgumentException("Post id in body (" + request.getPostId()
+                    + ") does not match path post id (" + postId + ")");
+        }
         if (request.getText() == null || request.getText().isBlank()) {
             throw new IllegalArgumentException("Comment text is required");
         }
-        long id = commentDao.insert(postId, request.getText());
+        // Single statement (check + insert): no race window, never a raw FK violation.
+        long id = commentDao.insertIfPostExists(postId, request.getText())
+                .orElseThrow(() -> new NotFoundException("Post not found: " + postId));
         return CommentDto.from(requireComment(postId, id));
     }
 
     @Override
     @Transactional
     public CommentDto updateComment(long postId, long commentId, UpdateCommentRequest request) {
+        if (!Long.valueOf(commentId).equals(request.getId())) {
+            throw new IllegalArgumentException("Comment id in body (" + request.getId()
+                    + ") does not match path comment id (" + commentId + ")");
+        }
+        if (!Long.valueOf(postId).equals(request.getPostId())) {
+            throw new IllegalArgumentException("Post id in body (" + request.getPostId()
+                    + ") does not match path post id (" + postId + ")");
+        }
         requirePost(postId);
         if (request.getText() == null || request.getText().isBlank()) {
             throw new IllegalArgumentException("Comment text is required");
         }
-        commentDao.update(postId, commentId, request.getText());
+        if (!commentDao.update(postId, commentId, request.getText())) {
+            throw new NotFoundException(
+                    "Comment not found: " + commentId + " for post " + postId);
+        }
         return CommentDto.from(requireComment(postId, commentId));
     }
 
@@ -68,7 +84,10 @@ public class CommentServiceImpl implements CommentService {
     @Transactional
     public void deleteComment(long postId, long commentId) {
         requirePost(postId);
-        commentDao.delete(postId, commentId);
+        if (!commentDao.delete(postId, commentId)) {
+            throw new NotFoundException(
+                    "Comment not found: " + commentId + " for post " + postId);
+        }
     }
 
     private void requirePost(long postId) {

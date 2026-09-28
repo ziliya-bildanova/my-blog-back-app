@@ -1,6 +1,6 @@
 package com.example.blog.service;
 
-import com.example.blog.config.TestConfig;
+import com.example.blog.BaseSpringTest;
 import com.example.blog.dto.CommentDto;
 import com.example.blog.dto.CreateCommentRequest;
 import com.example.blog.dto.CreatePostRequest;
@@ -8,11 +8,7 @@ import com.example.blog.dto.PostDto;
 import com.example.blog.dto.UpdateCommentRequest;
 import com.example.blog.exception.NotFoundException;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -22,10 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Service tests for comments. Shares the cached Spring context.
  */
-@ExtendWith(SpringExtension.class)
-@ContextConfiguration(classes = TestConfig.class)
-@Transactional
-class CommentServiceTest {
+class CommentServiceTest extends BaseSpringTest {
 
     @Autowired
     private CommentService commentService;
@@ -61,11 +54,33 @@ class CommentServiceTest {
         assertThatThrownBy(() -> commentService.getComments(999999L))
                 .isInstanceOf(NotFoundException.class);
         assertThatThrownBy(() -> createComment(999999L, "x"))
-                .isInstanceOf(NotFoundException.class);
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("Post not found");
 
         long postId = createPost();
         assertThatThrownBy(() -> commentService.getComment(postId, 999999L))
                 .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> commentService.deleteComment(postId, 999999L))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void idMismatchRejected() {
+        long postId = createPost();
+
+        CreateCommentRequest create = new CreateCommentRequest();
+        create.setText("x");
+        create.setPostId(postId + 1);
+        assertThatThrownBy(() -> commentService.createComment(postId, create))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        CommentDto created = createComment(postId, "Hello");
+        UpdateCommentRequest update = new UpdateCommentRequest();
+        update.setId(created.getId() + 1);
+        update.setText("x");
+        update.setPostId(postId);
+        assertThatThrownBy(() -> commentService.updateComment(postId, created.getId(), update))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     private long createPost() {

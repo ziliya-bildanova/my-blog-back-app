@@ -16,7 +16,6 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>21</maven.compiler.release>
         <spring.version>6.1.14</spring.version>
-        <spring-data-jdbc.version>3.3.5</spring-data-jdbc.version>
         <jackson.version>2.17.3</jackson.version>
         <h2.version>2.2.224</h2.version>
         <junit-bom.version>5.11.4</junit-bom.version>
@@ -24,6 +23,8 @@
         <assertj.version>3.26.3</assertj.version>
         <servlet-api.version>6.0.0</servlet-api.version>
         <logback.version>1.5.12</logback.version>
+        <hibernate-validator.version>8.0.1.Final</hibernate-validator.version>
+        <expressly.version>5.0.0</expressly.version>
     </properties>
 
     <dependencyManagement>
@@ -60,11 +61,16 @@
             <artifactId>spring-tx</artifactId>
             <version>${spring.version}</version>
         </dependency>
-        <!-- Spring Data JDBC (JDBC repositories support; DAOs are built on JdbcTemplate) -->
+        <!-- Bean Validation (JSR 380) for request DTOs -->
         <dependency>
-            <groupId>org.springframework.data</groupId>
-            <artifactId>spring-data-jdbc</artifactId>
-            <version>${spring-data-jdbc.version}</version>
+            <groupId>org.hibernate.validator</groupId>
+            <artifactId>hibernate-validator</artifactId>
+            <version>${hibernate-validator.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.expressly</groupId>
+            <artifactId>expressly</artifactId>
+            <version>${expressly.version}</version>
         </dependency>
         <!-- JSON -->
         <dependency>

@@ -4,9 +4,11 @@ Backend for the [my-blog-front-app](../my-blog-front-app) frontend (blog лен�
 
 - **Java 21**, **Spring Framework 6.1** (без Spring Boot), сборка **Maven**, упаковка **WAR**
 - Сервлет-контейнер: **Tomcat 10.1** (подойдёт и Jetty 12, см. деплой)
-- БД: **H2 in-memory** (схема создаётся при старте из `schema.sql`, демо-данные — из `data.sql`)
-- Слои: `controller` → `service` → `dao` (JdbcTemplate) → H2; DTO для REST-контракта; `GlobalExceptionHandler` (404/400 в JSON)
-- Тесты: JUnit 5 + Spring TestContext (кеширование контекстов), Mockito, MockMvc, AssertJ
+- БД: **H2 in-memory** (схема создаётся при старте из `schema.sql`, демо-данные — из `data.sql`);
+  параметры подключения — в `application.properties`, переопределяются через `-Ddb.url=... -Ddb.user=... -Ddb.password=...`
+- Слои: `controller` → `service` → `dao` (JdbcTemplate) → H2; DTO для REST-контракта с Bean Validation;
+  `GlobalExceptionHandler` (404/400/413/415 в JSON)
+- Тесты: JUnit 5 + Spring TestContext (один кешированный контекст на все Spring-тесты), Mockito, MockMvc, AssertJ
 
 ## Быстрый старт
 
@@ -17,7 +19,7 @@ git clone <your-fork-url> my-blog-back-app
 cd my-blog-back-app
 git checkout develop
 
-# тесты (20 тестов, всё зелёное)
+# тесты (54 теста, всё зелёное)
 mvn test
 
 # сборка war
@@ -55,36 +57,48 @@ WAR должен разворачиваться как **ROOT**, потому ч
 mvn test
 ```
 
-- `dao/*Test` — DAO на встроенной H2 (общий кешированный контекст `TestConfig`)
+- `dao/*Test` — DAO на встроенной H2 (кешированный контекст `TestConfig`)
 - `service/*Test` — сервисы + реальный DAO-слой на H2 (тот же контекст)
-- `controller/PostControllerMvcTest` — MVC-срез: контроллеры + Jackson + handler, сервисы замоканы (без контекста)
-- `BlogIntegrationTest` — сквозной сценарий по HTTP (MockMvc + сервисы + H2, контекст `WebTestConfig`)
+- `controller/*MvcTest` — MVC-срезы: контроллеры + Jackson + валидация + handler, сервисы замоканы (без контекста)
+- `BlogIntegrationTest` — сквозной сценарий по HTTP со всеми полями ответов (тот же контекст)
+- `BlogErrorTest` — ошибки: валидация, отсутствующие ресурсы, битый JSON, лимиты (тот же контекст)
+- `ConcurrentCommentTest` — гонка «удаление поста vs создание комментария» (тот же контекст)
 
-Контекстов всего два (`TestConfig`, `WebTestConfig`), оба переиспользуются — кеширование Spring TestContext.
+Один общий контекст на все Spring-тесты (`BaseSpringTest`), каждый тест в транзакции с rollback —
+кеширование Spring TestContext, изоляция без чистки таблиц.
 
 ## Структура
 
 ```
 src/main/java/com/example/blog/
-  config/AppConfig.java               # MVC, CORS, DataSource(H2), Tx, Multipart, init schema.sql+data.sql
-  config/WebAppInitializer.java       # bootstrap DispatcherServlet -> "/"
-  controller/PostController.java      # /api/posts + likes + image
-  controller/CommentController.java   # /api/posts/{postId}/comments
-  service/PostService(Impl).java      # пагинация, превью 128 символов + "…", валидация
-  service/CommentService(Impl).java
-  dao/PostDao(Impl).java             # JdbcTemplate: посты, теги, картинка, поиск по title/text/tag
-  dao/CommentDao(Impl).java
-  model/Post.java, Comment.java, ImageData.java
+  config/AppConfig.java               # сборка: WebMvcConfig + PersistenceConfig + DbInitConfig
+  config/WebMvcConfig.java            # MVC, CORS, multipart
+  config/PersistenceConfig.java       # DataSource (из application.properties), JdbcTemplate, транзакции
+  config/DbInitConfig.java            # накатка schema.sql + data.sql при старте
+  config/WebAppInitializer.java       # bootstrap DispatcherServlet -> "/", лимиты multipart
+  controller/PostController.java      # /api/posts + likes + image (параметры обязательны, @Valid)
+  controller/CommentController.java   # /api/posts/{postId}/comments (@Valid)
+  service/PostService(Impl).java      # пагинация (pageSize ≤ 100), сверка id, лимит картинки 5 МБ
+  service/CommentService(Impl).java   # сверка id/postId, вставка комментария одним SQL
+  dao/PostDao(Impl).java             # JdbcTemplate: превью в SQL, batch тегов, регистронезависимый поиск с ESCAPE
+  dao/CommentDao(Impl).java          # INSERT..SELECT (без гонки), boolean/Optional вместо исключений
+  model/Post.java, Comment.java, ImageData.java   # defensive copy, equals/hashCode по id
   dto/PostDto.java, PostListResponse.java, Create/UpdatePostRequest.java,
-      CommentDto.java, Create/UpdateCommentRequest.java
-  exception/NotFoundException.java, GlobalExceptionHandler.java
-src/main/resources/schema.sql         # posts, post_tags, comments (CASCADE)
+      CommentDto.java, Create/UpdateCommentRequest.java, PostValidation.java  # Bean Validation
+  exception/NotFoundException.java, PayloadTooLargeException.java, GlobalExceptionHandler.java
+src/main/resources/application.properties  # db.url/db.user/db.password (можно -Ddb.url=...)
+src/main/resources/schema.sql         # posts, post_tags (PK post_id+tag), comments (CASCADE)
 src/main/resources/data.sql           # демо-данные для ручной проверки с фронтом
 ```
 
-Схема БД: `posts(id, title, text, likes_count, image, image_content_type)`,
-`post_tags(post_id → posts ON DELETE CASCADE, tag)`,
-`comments(id, post_id → posts ON DELETE CASCADE, text)`.
+Схема БД: `posts(id, title VARCHAR(255), text, likes_count, image, image_content_type)`,
+`post_tags(post_id → posts ON DELETE CASCADE, tag VARCHAR(100), PK(post_id, tag))`,
+`comments(id, post_id → posts ON DELETE CASCADE, text VARCHAR(2000))`.
+
+Правила валидации: title `@NotBlank @Size(255)`, текст поста `@NotBlank`,
+тег `@NotBlank @Size(100)`, не более 10 тегов, комментарий `@NotBlank @Size(2000)`,
+id/postId в теле обязаны совпадать с URL. Поиск регистронезависимый, `%` и `_` ищутся буквально.
+Картинка — макс. 5 МБ (иначе 413), пустой файл — 400.
 
 ## API
 
@@ -104,7 +118,9 @@ src/main/resources/data.sql           # демо-данные для ручно�
 | PUT | `/api/posts/{id}/comments/{commentId}` | `{id,text,postId}` | обновлённый комментарий |
 | DELETE | `/api/posts/{id}/comments/{commentId}` | — | `200 OK` |
 
-Ошибки: `404 {"error": "..."}` (нет поста/комментария/картинки), `400 {"error": "..."}` (пустые title/text).
+Ошибки: `404 {"error": "..."}` (нет поста/комментария/картинки),
+`400 {"error": "..."}` (валидация, неверные id/параметры/JSON),
+`413 {"error": "..."}` (картинка больше 5 МБ), `415` (неверный Content-Type).
 CORS открыт (`*`) — фронт (nginx на `:80`) ходит на `:8080` с другого ориджина.
 
 Примеры:

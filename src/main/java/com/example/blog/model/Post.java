@@ -23,7 +23,7 @@ public class Post {
         this.id = id;
         this.title = title;
         this.text = text;
-        this.tags = tags == null ? new ArrayList<>() : tags;
+        this.tags = copyTags(tags);
         this.likesCount = likesCount;
         this.commentsCount = commentsCount;
     }
@@ -57,7 +57,7 @@ public class Post {
     }
 
     public void setTags(List<String> tags) {
-        this.tags = tags == null ? new ArrayList<>() : tags;
+        this.tags = copyTags(tags);
     }
 
     public int getLikesCount() {
@@ -76,20 +76,19 @@ public class Post {
         this.commentsCount = commentsCount;
     }
 
+    private static List<String> copyTags(List<String> tags) {
+        return tags == null ? new ArrayList<>() : new ArrayList<>(tags);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof Post post)) return false;
-        return likesCount == post.likesCount
-                && commentsCount == post.commentsCount
-                && Objects.equals(id, post.id)
-                && Objects.equals(title, post.title)
-                && Objects.equals(text, post.text)
-                && Objects.equals(tags, post.tags);
+        return Objects.equals(id, post.id);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, title, text, tags, likesCount, commentsCount);
+        return Objects.hashCode(id);
     }
 }
