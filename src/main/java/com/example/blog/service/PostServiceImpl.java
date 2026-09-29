@@ -23,7 +23,7 @@ public class PostServiceImpl implements PostService {
     static final int PREVIEW_LIMIT = 128;
     /** Max feed page size; larger values are rejected with 400. */
     static final int MAX_PAGE_SIZE = 100;
-    /** Max uploaded image: 5 MB (mirrors the multipart config in WebAppInitializer). */
+    /** Max uploaded image: 5 MB (mirrors spring.servlet.multipart.max-file-size). */
     static final long MAX_IMAGE_SIZE = 5L * 1024 * 1024;
 
     private final PostDao postDao;

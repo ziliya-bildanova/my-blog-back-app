@@ -4,23 +4,19 @@ import com.example.blog.dto.CreatePostRequest;
 import com.example.blog.dto.PostDto;
 import com.example.blog.dto.PostListResponse;
 import com.example.blog.dto.UpdatePostRequest;
-import com.example.blog.exception.GlobalExceptionHandler;
 import com.example.blog.exception.NotFoundException;
 import com.example.blog.model.ImageData;
 import com.example.blog.service.CommentService;
 import com.example.blog.service.PostService;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
 
@@ -43,33 +39,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * MVC slice test: controllers + Jackson + validation + exception handler,
- * services are mocked. No Spring context needed.
+ * MVC slice test (Spring Boot Test): controllers + Jackson + validation +
+ * exception handler from the real context, services replaced with mocks.
  */
-@ExtendWith(MockitoExtension.class)
+@WebMvcTest(PostController.class)
 class PostControllerMvcTest {
 
-    @Mock
-    private PostService postService;
-
-    @Mock
-    private CommentService commentService;
-
-    @Captor
-    private ArgumentCaptor<CreatePostRequest> createCaptor;
-
-    @Captor
-    private ArgumentCaptor<UpdatePostRequest> updateCaptor;
-
+    @Autowired
     private MockMvc mockMvc;
 
-    @BeforeEach
-    void setUp() {
-        mockMvc = MockMvcBuilders
-                .standaloneSetup(new PostController(postService), new CommentController(commentService))
-                .setControllerAdvice(new GlobalExceptionHandler())
-                .build();
-    }
+    @MockitoBean
+    private PostService postService;
+
+    @MockitoBean
+    private CommentService commentService;
+
+    private final ArgumentCaptor<CreatePostRequest> createCaptor =
+            ArgumentCaptor.forClass(CreatePostRequest.class);
+    private final ArgumentCaptor<UpdatePostRequest> updateCaptor =
+            ArgumentCaptor.forClass(UpdatePostRequest.class);
 
     @Test
     void listPostsPassesExactParams() throws Exception {
