@@ -1,29 +1,32 @@
-# My Blog Backend App
+# My Blog Backend App (Spring Boot)
 
 Backend for the [my-blog-front-app](../my-blog-front-app) frontend (blog лента постов + страница поста).
+Continuation of the plain-Spring project: same REST contract and layers, now on **Spring Boot 3.4 + Gradle**.
 
-- **Java 21**, **Spring Framework 6.1** (без Spring Boot), сборка **Maven**, упаковка **WAR**
-- Сервлет-контейнер: **Tomcat 10.1** (подойдёт и Jetty 12, см. деплой)
-- БД: **H2 in-memory** (схема создаётся при старте из `schema.sql`, демо-данные — из `data.sql`);
-  параметры подключения — в `application.properties`, переопределяются через `-Ddb.url=... -Ddb.user=... -Ddb.password=...`
-- Слои: `controller` → `service` → `dao` (JdbcTemplate) → H2; DTO для REST-контракта с Bean Validation;
+- **Java 21**, **Spring Boot 3.4** (embedded Tomcat), сборка **Gradle**, упаковка **Executable Jar**
+- БД: **H2 in-memory** (схема из `schema.sql`, демо-данные из `data.sql` накатываются Boot автоматически);
+  параметры подключения — в `application.properties`, переопределяются через `-Dspring.datasource.url=...`
+- Слои: `controller` → `service` → `dao` (JdbcTemplate) → H2; DTO с Bean Validation;
   `GlobalExceptionHandler` (404/400/413/415 в JSON)
-- Тесты: JUnit 5 + Spring TestContext (один кешированный контекст на все Spring-тесты), Mockito, MockMvc, AssertJ
+- Тесты: JUnit 5 + Spring Boot Test (один кешированный контекст на все full-тесты), `@WebMvcTest`-срезы, Mockito, MockMvc, AssertJ
 
 ## Быстрый старт
 
-Требования: JDK 21+, Maven 3.9+, Docker (опционально), Tomcat 10.1 (для ручного деплоя).
+Требования: JDK 21+, Gradle 8.10+ (или `./gradlew`, если добавлен wrapper).
 
 ```sh
 git clone <your-fork-url> my-blog-back-app
 cd my-blog-back-app
-git checkout develop
+git checkout module_one_sprint_four_branch
 
-# тесты (54 теста, всё зелёное)
-mvn test
+# тесты (всё зелёное)
+gradle test
 
-# сборка war
-mvn package   # -> target/my-blog-back-app.war
+# сборка executable jar
+gradle bootJar   # -> build/libs/my-blog-back-app-1.0.0.jar
+
+# запуск (встроенный Tomcat на :8080)
+java -jar build/libs/my-blog-back-app-1.0.0.jar
 ```
 
 Backend слушает **http://localhost:8080**, фронт по умолчанию обращается именно туда.
@@ -32,50 +35,32 @@ Backend слушает **http://localhost:8080**, фронт по умолчан
 
 ```sh
 docker build -t my-blog-back-app .
-docker run --rm -p 8080:8080 my-blog-back-app
+docker run --name my-blog-back-app --restart unless-stopped -p 8080:8080 my-blog-back-app
 ```
 
 Проверка: `curl "http://localhost:8080/api/posts?search=&pageNumber=1&pageSize=5"`
 
-## Деплой в Tomcat 10.1 вручную
-
-1. Удалите дефолтное приложение (иначе оно перекроет `ROOT.war`):
-   `rm -rf $CATALINA_HOME/webapps/ROOT`
-2. `cp target/my-blog-back-app.war $CATALINA_HOME/webapps/ROOT.war`
-3. `$CATALINA_HOME/bin/startup.sh`
-
-WAR должен разворачиваться как **ROOT**, потому что фронт ходит на `http://localhost:8080/api/...`
-без префикса контекста. В Jetty 12 аналогично: `cp ...war $JETTY_BASE/webapps/root.war`.
-
-Контекст Spring поднимается через `WebAppInitializer`
-(`AbstractAnnotationConfigDispatcherServletInitializer`, конфиг `AppConfig`);
-`src/main/webapp/WEB-INF/web.xml` — минимальный дескриптор (Servlet 6.0).
-
 ## Тесты
 
 ```sh
-mvn test
+gradle test
 ```
 
-- `dao/*Test` — DAO на встроенной H2 (кешированный контекст `TestConfig`)
-- `service/*Test` — сервисы + реальный DAO-слой на H2 (тот же контекст)
-- `controller/*MvcTest` — MVC-срезы: контроллеры + Jackson + валидация + handler, сервисы замоканы (без контекста)
-- `BlogIntegrationTest` — сквозной сценарий по HTTP со всеми полями ответов (тот же контекст)
-- `BlogErrorTest` — ошибки: валидация, отсутствующие ресурсы, битый JSON, лимиты (тот же контекст)
-- `ConcurrentCommentTest` — гонка «удаление поста vs создание комментария» (тот же контекст)
+- `dao/*Test`, `service/*Test` — `@SpringBootTest` на встроенной H2 (общий кешированный контекст)
+- `controller/*MvcTest` — `@WebMvcTest`-срезы: контроллеры + Jackson + валидация, сервисы — `@MockitoBean`
+- `BlogIntegrationTest` — сквозной сценарий по HTTP со всеми полями ответов
+- `BlogErrorTest` — ошибки: валидация, отсутствующие ресурсы, битый JSON, лимиты
+- `ConcurrentCommentTest` — гонка «удаление поста vs создание комментария»
+- `service/ToPreviewTest` — чистый юнит без контекста
 
-Один общий контекст на все Spring-тесты (`BaseSpringTest`), каждый тест в транзакции с rollback —
-кеширование Spring TestContext, изоляция без чистки таблиц.
+Тестовые ресурсы (`src/test/resources`): своя H2 (`testdb`), только `schema.sql`, пустой `data.sql` — демо-данные в тесты не попадают. Каждый тест в транзакции с rollback.
 
 ## Структура
 
 ```
 src/main/java/com/example/blog/
-  config/AppConfig.java               # сборка: WebMvcConfig + PersistenceConfig + DbInitConfig
-  config/WebMvcConfig.java            # MVC, CORS, multipart
-  config/PersistenceConfig.java       # DataSource (из application.properties), JdbcTemplate, транзакции
-  config/DbInitConfig.java            # накатка schema.sql + data.sql при старте
-  config/WebAppInitializer.java       # bootstrap DispatcherServlet -> "/", лимиты multipart
+  MyBlogBackApplication.java      # точка входа (@SpringBootApplication)
+  config/WebConfig.java           # CORS (без @EnableWebMvc, чтобы не гасить авто-конфигурацию Boot)
   controller/PostController.java      # /api/posts + likes + image (параметры обязательны, @Valid)
   controller/CommentController.java   # /api/posts/{postId}/comments (@Valid)
   service/PostService(Impl).java      # пагинация (pageSize ≤ 100), сверка id, лимит картинки 5 МБ
@@ -86,7 +71,7 @@ src/main/java/com/example/blog/
   dto/PostDto.java, PostListResponse.java, Create/UpdatePostRequest.java,
       CommentDto.java, Create/UpdateCommentRequest.java, PostValidation.java  # Bean Validation
   exception/NotFoundException.java, PayloadTooLargeException.java, GlobalExceptionHandler.java
-src/main/resources/application.properties  # db.url/db.user/db.password (можно -Ddb.url=...)
+src/main/resources/application.properties  # порт, DataSource, multipart-лимиты
 src/main/resources/schema.sql         # posts, post_tags (PK post_id+tag), comments (CASCADE)
 src/main/resources/data.sql           # демо-данные для ручной проверки с фронтом
 ```
@@ -135,11 +120,5 @@ curl -X PUT http://localhost:8080/api/posts/3/image -F "image=@pic.jpg;type=imag
 
 ## Git-процесс (GitFlow)
 
-Работа велась в ветке `develop` микрокоммитами, слияние в `main` — через merge.
-Чтобы опубликовать у себя:
-
-```sh
-# создайте пустой публичный репозиторий my-blog-back-app на GitHub, затем:
-git remote add origin git@github.com:<you>/my-blog-back-app.git
-git push -u origin main develop
-```
+Ветка спринта `module_one_sprint_four_branch` от `main`, микрокоммиты, затем Pull Request в `main`.
+Предыдущий спринт (plain Spring + Maven): история в `main`.
