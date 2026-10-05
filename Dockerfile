@@ -1,13 +1,12 @@
-# Build WAR with Maven, run on Tomcat 10.1 (Jakarta EE, Spring 6.1 compatible).
-# Deployed as ROOT so the frontend (http://localhost:8080/api/...) works without a context prefix.
-FROM maven:3.9.9-eclipse-temurin-21 AS build
+# Build executable jar with Gradle, run on JRE 21 (embedded Tomcat inside the jar).
+FROM gradle:8.10.2-jdk21 AS build
 WORKDIR /app
-COPY pom.xml .
+COPY settings.gradle build.gradle ./
 COPY src ./src
-RUN mvn -B package -DskipTests
+RUN gradle bootJar --no-daemon
 
-FROM tomcat:10.1-jdk21
-RUN rm -rf /usr/local/tomcat/webapps/ROOT
-COPY --from=build /app/target/my-blog-back-app.war /usr/local/tomcat/webapps/ROOT.war
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY --from=build /app/build/libs/my-blog-back-app-1.0.0.jar app.jar
 EXPOSE 8080
-CMD ["catalina.sh", "run"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
